@@ -1,0 +1,40 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "marsbots_eden"
+authors = [{ name = "Jonathan Miller", email = "jon@jmill.dev" }]
+readme = "README.md"
+dynamic = ["version", "description"]
+dependencies = ["marsbots"]
+
+[tool.flit.sdist]
+include = ["marsbots_eden/"]
+
+[project.optional-dependencies]
+dev = ["black", "pytest", "mypy", "pre-commit", "flake8"]
+
+[tool.mypy]
+disallow_untyped_defs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+
+[tool.black]
+line-length = 88
+experimental-string-processing = true
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | dev
+)/
+'''
