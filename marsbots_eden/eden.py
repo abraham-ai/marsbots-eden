@@ -1,14 +1,13 @@
 import asyncio
-from dataclasses import dataclass, field
 import io
 import json
+from dataclasses import dataclass
+from dataclasses import field
 from typing import List
 
 import aiohttp
 import discord
 import requests
-
-from marsbots.discord_utils import update_message
 
 
 @dataclass
@@ -37,7 +36,7 @@ class EdenClipXSettings:
     num_octaves: int = 3
     octave_scale: float = 2.0
     clip_model_options: List = field(
-        default_factory=lambda: [["ViT-B/32", "ViT-B/16", "RN50"]]
+        default_factory=lambda: [["ViT-B/32", "ViT-B/16", "RN50"]],
     )
     num_iterations: tuple[int] = (100, 200, 300)
 
@@ -61,86 +60,96 @@ class OracleSettings:
 async def generation_loop(
     gateway_url,
     minio_url,
-    bot_message,
+    ctx,
+    start_bot_message,
     source,
     config,
     refresh_interval: int,
 ):
     generator_names = {
-        EdenClipXSettings: 'eden-clipx',
-        StableDiffusionSettings: 'stable-diffusion',
-        OracleSettings: 'oracle'
+        EdenClipXSettings: "eden-clipx",
+        StableDiffusionSettings: "stable-diffusion",
+        OracleSettings: "oracle",
     }
 
     generator_name = generator_names[type(config)]
-    data = {'source': source.__dict__, 'generator_name': generator_name, 'config': config.__dict__}
-    result = requests.post(gateway_url + '/request_creation', json=data)
+    data = {
+        "source": source.__dict__,
+        "generator_name": generator_name,
+        "config": config.__dict__,
+    }
+    result = requests.post(gateway_url + "/request_creation", json=data)
 
-    if not await check_server_result_ok(result, bot_message):
+    check, error = await check_server_result_ok(result)
+    if not check:
+        await edit_interaction(ctx, start_bot_message, error)
         return
 
     result = json.loads(result.content)
-    task_id = result['task_id']
+    task_id = result["task_id"]
     current_sha = None
 
     while True:
-        result = requests.post(gateway_url + '/get_creations', json={"task": task_id})
+        result = requests.post(gateway_url + "/get_creations", json={"task": task_id})
 
-        if not await check_server_result_ok(result, bot_message):
+        check, error = await check_server_result_ok(result)
+        if not check:
+            await edit_interaction(ctx, start_bot_message, error)
             return
 
         result = json.loads(result.content)
 
         if not result:
-            return append_interaction(bot_message, "_Server error: task ID not found_")
+            message_update = "_Server error: task ID not found_"
+            await edit_interaction(ctx, start_bot_message, message_update)
+            return
 
         result = result[0]
-        status = result['status']
-        
+        status = result["status"]
+
+        message_update = ""
+        file_update = None
+
         # update message string
-        if status == 'failed':
-            await append_interaction(bot_message, "_Server error: Eden task failed_")
-        elif status in 'pending':
-            await append_interaction(bot_message, "_Creation is pending_")
-        elif status == 'queued':
-            queue_idx = result['status_code']
-            await append_interaction(bot_message, f"_Creation is #{queue_idx} in queue_")
-        elif status == 'running':
-            progress = result['status_code']
-            await append_interaction(bot_message, f"_Creation is **{progress}%** complete_")
-        elif status == 'complete':
-            await append_interaction(bot_message, "")
+        if status == "failed":
+            message_update += "_Server error: Eden task failed_"
+        elif status in "pending":
+            message_update += "_Creation is pending_"
+        elif status == "queued":
+            queue_idx = result["status_code"]
+            message_update += f"_Creation is #{queue_idx} in queue_"
+        elif status == "running":
+            progress = result["status_code"]
+            message_update += f"_Creation is **{progress}%** complete_"
+        elif status == "complete":
+            message_update += ""
 
         # update message image
-        if status == 'complete' or 'intermediate_sha' in result:
-            if status == 'complete':
-                last_sha = result['sha']
+        if status == "complete" or "intermediate_sha" in result:
+            if status == "complete":
+                last_sha = result["sha"]
             else:
-                last_sha = result['intermediate_sha'][-1]
+                last_sha = result["intermediate_sha"][-1]
             if last_sha != current_sha:
                 current_sha = last_sha
-                sha_url = f'{minio_url}/{current_sha}'
-                filename = f'{current_sha}.png'
-                discord_file = await get_discord_file_from_url(sha_url, filename)
-                await update_image(bot_message, discord_file)
+                sha_url = f"{minio_url}/{current_sha}"
+                filename = f"{current_sha}.png"
+                file_update = await get_discord_file_from_url(sha_url, filename)
 
-        if status not in ['queued', 'pending', 'running']:
+        if status not in ["queued", "pending", "running"]:
             break
+
+        await edit_interaction(ctx, start_bot_message, message_update, file_update)
 
         await asyncio.sleep(refresh_interval)
 
 
-def appender(message, suffix):
-    return message.split("\n")[0] + "\n\n" + suffix
-
-
-async def append_interaction(message, message_suffix):
-    message_content = appender(message.content, message_suffix)
-    await update_message(message, content=message_content)
-
-
-async def update_image(message, image):
-    await update_message(message, files=[image])
+async def edit_interaction(ctx, start_bot_message, message_update, file_update=None):
+    message_content = f"{start_bot_message}\n{message_update}"
+    if file_update:
+        await ctx.edit(content=message_content, file=file_update)
+    else:
+        await ctx.edit(content=message_content)
 
 
 async def get_discord_file_from_url(url, filename):
@@ -153,10 +162,9 @@ async def get_discord_file_from_url(url, filename):
             return discord_file
 
 
-async def check_server_result_ok(result, bot_message):
+async def check_server_result_ok(result):
     if result.status_code != 200:
         error_message = result.content.decode("utf-8")
-        message_suffix = f"_Server error: {error_message}_"
-        message_content = appender(bot_message.content, message_suffix)
-        await update_message(bot_message, content=message_content)
-    return result.status_code == 200
+        error = f"_Server error: {error_message}_"
+        return False, error
+    return result.status_code == 200, None
