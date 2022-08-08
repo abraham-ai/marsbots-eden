@@ -61,56 +61,70 @@ class OracleSettings:
 async def generation_loop(
     gateway_url,
     minio_url,
-    interaction_message,
+    bot_message,
+    source,
     config,
     refresh_interval: int,
 ):
-    result = requests.post(gateway_url + "/request_creation", json=config)
+    generator_names = {
+        EdenClipXSettings: 'eden-clipx',
+        StableDiffusionSettings: 'stable-diffusion',
+        OracleSettings: 'oracle'
+    }
 
-    if not await check_server_result_ok(result, interaction_message):
+    generator_name = generator_names[type(config)]
+    data = {'source': source.__dict__, 'generator_name': generator_name, 'config': config.__dict__}
+    result = requests.post(gateway_url + '/request_creation', json=data)
+
+    if not await check_server_result_ok(result, bot_message):
         return
 
     result = json.loads(result.content)
-    task_id = result["task_id"]
+    task_id = result['task_id']
     current_sha = None
-    await update_progress(interaction_message, 0)
 
     while True:
-        result = requests.post(
-            gateway_url + "/get_creations",
-            json={"task_id": task_id},
-        )
+        result = requests.post(gateway_url + '/get_creations', json={"task": task_id})
 
-        if not await check_server_result_ok(result, interaction_message):
+        if not await check_server_result_ok(result, bot_message):
             return
 
         result = json.loads(result.content)
 
         if not result:
-            message_suffix = "_Server error: task ID not found_"
-            message_content = appender(interaction_message.content, message_suffix)
-            return await update_message(interaction_message, content=message_content)
+            return append_interaction(bot_message, "_Server error: task ID not found_")
 
         result = result[0]
-        status = result["status"]
-        progress = -1 if status == "pending" else result["status_code"]
-        await update_progress(interaction_message, progress)
+        status = result['status']
+        
+        # update message string
+        if status == 'failed':
+            await append_interaction(bot_message, "_Server error: Eden task failed_")
+        elif status in 'pending':
+            await append_interaction(bot_message, "_Creation is pending_")
+        elif status == 'queued':
+            queue_idx = result['status_code']
+            await append_interaction(bot_message, f"_Creation is #{queue_idx} in queue_")
+        elif status == 'running':
+            progress = result['status_code']
+            await append_interaction(bot_message, f"_Creation is **{progress}%** complete_")
+        elif status == 'complete':
+            await append_interaction(bot_message, "")
 
-        if "intermediate_sha" in result:
-            last_sha = result["intermediate_sha"][-1]
+        # update message image
+        if status == 'complete' or 'intermediate_sha' in result:
+            if status == 'complete':
+                last_sha = result['sha']
+            else:
+                last_sha = result['intermediate_sha'][-1]
             if last_sha != current_sha:
                 current_sha = last_sha
-                sha_url = f"{minio_url}/{current_sha}"
-                filename = f"{current_sha}.png"
+                sha_url = f'{minio_url}/{current_sha}'
+                filename = f'{current_sha}.png'
                 discord_file = await get_discord_file_from_url(sha_url, filename)
-                await update_image(interaction_message, discord_file)
+                await update_image(bot_message, discord_file)
 
-        if status == "failed":
-            message_suffix = "_Server error: Eden task failed_"
-            message_content = appender(interaction_message.content, message_suffix)
-            return await update_message(interaction_message, content=message_content)
-
-        if status not in ["pending", "running"]:
+        if status not in ['queued', 'pending', 'running']:
             break
 
         await asyncio.sleep(refresh_interval)
@@ -120,17 +134,7 @@ def appender(message, suffix):
     return message.split("\n")[0] + "\n\n" + suffix
 
 
-async def update_progress(message, progress):
-    if progress == "__none__":
-        progress = 0
-    progress_str = "pending" if progress == -1 else f"**{progress}%** complete"
-    message_suffix = "" if progress == 100 else f"_Creation is {progress_str}_"
-    message_content = appender(message.content, message_suffix)
-    await update_message(message, content=message_content)
-
-
-async def update_queue_position(message, position):
-    message_suffix = f"_Queue position: **{position}**_"
+async def append_interaction(message, message_suffix):
     message_content = appender(message.content, message_suffix)
     await update_message(message, content=message_content)
 
@@ -149,10 +153,10 @@ async def get_discord_file_from_url(url, filename):
             return discord_file
 
 
-async def check_server_result_ok(result, interaction_message):
+async def check_server_result_ok(result, bot_message):
     if result.status_code != 200:
         error_message = result.content.decode("utf-8")
         message_suffix = f"_Server error: {error_message}_"
-        message_content = appender(interaction_message.content, message_suffix)
-        await update_message(interaction_message, content=message_content)
+        message_content = appender(bot_message.content, message_suffix)
+        await update_message(bot_message, content=message_content)
     return result.status_code == 200
