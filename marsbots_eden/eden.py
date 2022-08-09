@@ -1,78 +1,34 @@
 import asyncio
 import io
 import json
-from dataclasses import dataclass
-from dataclasses import field
-from typing import List
 
 import aiohttp
 import discord
 import requests
 
-
-@dataclass
-class SourceSettings:
-    origin: str
-    author: int
-    author_name: str
-    guild: int
-    guild_name: str
-    channel: int
-    channel_name: str
-
-
-@dataclass
-class EdenClipXSettings:
-    text_input: str
-    image_url: str = ""
-    step_multiplier: float = 1.0
-    color_target_pixel_fraction: float = 0.75
-    color_loss_f: float = 0.0
-    color_rgb_target: tuple[float] = (0.0, 0.0, 0.0)
-    image_weight: float = 0.35
-    n_permuted_prompts_to_add: int = -1
-    width: int = 0
-    height: int = 0
-    num_octaves: int = 3
-    octave_scale: float = 2.0
-    clip_model_options: List = field(
-        default_factory=lambda: [["ViT-B/32", "ViT-B/16", "RN50"]],
-    )
-    num_iterations: tuple[int] = (100, 200, 300)
-
-
-@dataclass
-class StableDiffusionSettings:
-    text_input: str
-    width: int
-    height: int
-    ddim_steps: int
-    plms: bool
-    C: int
-    f: int
-
-
-@dataclass
-class OracleSettings:
-    text_input: str
+from marsbots_eden.models import SourceSettings
 
 
 async def generation_loop(
-    gateway_url,
-    minio_url,
-    ctx,
-    start_bot_message,
-    source,
+    gateway_url: str,
+    minio_url: str,
+    ctx: discord.ApplicationContext,
+    start_bot_message: str,
+    source: SourceSettings,
     config,
     refresh_interval: int,
 ):
-    generator_names = {
-        EdenClipXSettings: "eden-clipx",
-        StableDiffusionSettings: "stable-diffusion",
-        OracleSettings: "oracle",
-    }
 
-    generator_name = generator_names[type(config)]
+    generator_name = config.generator_name
+    config_dict = config.__dict__
+    params = config_dict.pop("generator_name", None)
+
+    data = {
+        "source": source.__dict__,
+        "generator_name": generator_name,
+        "config": params,
+    }
+    print(data)
     data = {
         "source": source.__dict__,
         "generator_name": generator_name,
