@@ -7,8 +7,6 @@ import aiohttp
 import discord
 import requests
 
-#from moviepy.editor import VideoFileClip
-
 from marsbots_eden.models import SourceSettings
 
 
@@ -137,7 +135,6 @@ async def get_video_clip_file(sha_url, gif):
         with open(sha_mp4, "wb") as f:
             f.write(res.content)
         os.system(f'ffmpeg -i {sha_mp4} {sha_gif}')
-        #VideoFileClip(sha_mp4).write_gif(sha_gif)
         file_update = discord.File(sha_gif, sha_gif)
     else:
         file_update = await get_discord_file_from_url(sha_url, sha_mp4)
