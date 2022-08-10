@@ -1,10 +1,13 @@
 import asyncio
+import os
 import io
 import json
 
 import aiohttp
 import discord
 import requests
+
+#from moviepy.editor import VideoFileClip
 
 from marsbots_eden.models import SourceSettings
 
@@ -21,19 +24,15 @@ async def generation_loop(
 
     generator_name = config.generator_name
     config_dict = config.__dict__
-    params = config_dict.pop("generator_name", None)
+    config_dict.pop("generator_name", None)
 
     data = {
         "source": source.__dict__,
         "generator_name": generator_name,
-        "config": params,
+        "config": config_dict
     }
     print(data)
-    data = {
-        "source": source.__dict__,
-        "generator_name": generator_name,
-        "config": config.__dict__,
-    }
+
     result = requests.post(gateway_url + "/request_creation", json=data)
 
     check, error = await check_server_result_ok(result)
@@ -82,21 +81,33 @@ async def generation_loop(
 
         # update message image
         if status == "complete" or "intermediate_sha" in result:
-            if status == "complete":
-                last_sha = result["sha"]
+            video_clip = False
+            if status == 'complete':
+                if 'video_sha' in result:
+                    last_sha = result['video_sha']
+                    video_clip = True
+                else:
+                    last_sha = result['sha']
             else:
-                last_sha = result["intermediate_sha"][-1]
+                last_sha = result['intermediate_sha'][-1]
             if last_sha != current_sha:
-                current_sha = last_sha
-                sha_url = f"{minio_url}/{current_sha}"
-                filename = f"{current_sha}.png"
-                file_update = await get_discord_file_from_url(sha_url, filename)
-
+                current_sha = last_sha                
+                if video_clip:
+                    message_update_gif = "_Creation is complete. Making GIF..._"
+                    await edit_interaction(ctx, start_bot_message, message_update_gif, None)
+                    sha_url = f'{minio_url}/{current_sha}.mp4'
+                    file_update = await get_video_clip_file(sha_url, gif=True)
+                else:
+                    sha_url = f'{minio_url}/{current_sha}'
+                    filename = f'{current_sha}.png'
+                    file_update = await get_discord_file_from_url(sha_url, filename)
+        
+        # finish up
+        await edit_interaction(ctx, start_bot_message, message_update, file_update)
+        
         if status not in ["queued", "pending", "running"]:
             break
-
-        await edit_interaction(ctx, start_bot_message, message_update, file_update)
-
+        
         await asyncio.sleep(refresh_interval)
 
 
@@ -118,9 +129,31 @@ async def get_discord_file_from_url(url, filename):
             return discord_file
 
 
+async def get_video_clip_file(sha_url, gif):
+    sha_mp4 = sha_url.split('/')[-1]
+    sha_gif = sha_mp4.replace('.mp4', '.gif')
+    if gif:
+        res = requests.get(sha_url)
+        with open(sha_mp4, "wb") as f:
+            f.write(res.content)
+        os.system(f'ffmpeg -i {sha_mp4} {sha_gif}')
+        #VideoFileClip(sha_mp4).write_gif(sha_gif)
+        file_update = discord.File(sha_gif, sha_gif)
+    else:
+        file_update = await get_discord_file_from_url(sha_url, sha_mp4)
+    delete_file(sha_mp4)
+    delete_file(sha_gif)
+    return file_update
+
+
 async def check_server_result_ok(result):
     if result.status_code != 200:
         error_message = result.content.decode("utf-8")
         error = f"_Server error: {error_message}_"
         return False, error
     return result.status_code == 200, None
+
+
+def delete_file(path):
+    if os.path.isfile(path):
+        os.remove(path)
