@@ -10,6 +10,38 @@ import requests
 from marsbots_eden.models import SourceSettings
 
 
+class ActionButtons(discord.ui.View):
+    def __init__(self, *items, ctx, gateway_url, creation_sha, refresh_action, timeout=180):
+        super().__init__(*items, timeout=timeout)
+        self.ctx = ctx
+        self.gateway_url = gateway_url
+        self.creation_sha = creation_sha
+        self.refresh_action = refresh_action
+
+    async def feedback(self, stat, interaction):
+        result = requests.post(self.gateway_url + "/update_stats", json={
+            "creation": self.creation_sha,
+            "stat": stat,
+            "opperation": "increase",
+            "address": interaction.user.id
+        })
+        print(result.content)
+        await interaction.response.defer()
+
+    @discord.ui.button(emoji="🔄", style=discord.ButtonStyle.blurple)
+    async def variations(self, button, interaction):
+        await self.refresh_action()
+
+    @discord.ui.button(emoji="🔥", style=discord.ButtonStyle.red)
+    async def burn(self, button, interaction):
+        await self.feedback('burn', interaction)
+
+    @discord.ui.button(label="🙌", style=discord.ButtonStyle.green)
+    async def praise(self, button, interaction):
+        await self.feedback('praise', interaction)
+        self.stop()
+
+
 async def generation_loop(
     gateway_url: str,
     minio_url: str,
@@ -17,9 +49,10 @@ async def generation_loop(
     start_bot_message: str,
     source: SourceSettings,
     config,
+    refresh_action,
     refresh_interval: int,
 ):
-
+    
     generator_name = config.generator_name
     config_dict = config.__dict__
     config_dict.pop("generator_name", None)
@@ -102,7 +135,12 @@ async def generation_loop(
         
         # finish up
         await edit_interaction(ctx, start_bot_message, message_update, file_update)
-        
+
+        # add interactions menu
+        if status == "complete":
+            actions = ActionButtons(ctx=ctx, gateway_url=gateway_url, creation_sha=current_sha, refresh_action=refresh_action)
+            await ctx.edit(view=actions)
+
         if status not in ["queued", "pending", "running"]:
             break
         
