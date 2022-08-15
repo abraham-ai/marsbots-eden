@@ -65,8 +65,8 @@ async def get_file_update(result, minio_url, is_video_request=False):
     file = None
     if status == "complete" and is_video_request:
         sha = result["video_sha"]
-        print(sha)
-        sha_url = f"{minio_url}/{sha}"
+        minio_url = minio_url.replace("creations-stg", "creations-prd")
+        sha_url = f"{minio_url}/{sha}.mp4"
         print(sha_url)
         file = await get_video_clip_file(sha_url, gif=True)
     elif status == "complete":
