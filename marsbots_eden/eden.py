@@ -31,7 +31,6 @@ async def request_creation(
         raise Exception(error)
 
     result = json.loads(result.content)
-    print(result)
     task_id = result["task_id"]
     return task_id
 
@@ -55,7 +54,7 @@ async def poll_creation_queue(
         raise Exception(message_update)
 
     result = result[0]
-    file = await get_file_update(result, minio_url, is_video_request)
+    file, _ = await get_file_update(result, minio_url, is_video_request)
 
     return result, file
 
@@ -63,11 +62,11 @@ async def poll_creation_queue(
 async def get_file_update(result, minio_url, is_video_request=False):
     status = result["status"]
     file = None
+    sha = None
     if status == "complete" and is_video_request:
         sha = result["video_sha"]
         minio_url = minio_url.replace("creations-stg", "creations-prd")
         sha_url = f"{minio_url}/{sha}.mp4"
-        print(sha_url)
         file = await get_video_clip_file(sha_url, gif=True)
     elif status == "complete":
         sha = result["sha"]
@@ -77,7 +76,7 @@ async def get_file_update(result, minio_url, is_video_request=False):
         sha = result["intermediate_sha"][-1]
         sha_url = f"{minio_url}/{sha}"
         file = await get_discord_file_from_url(sha_url, sha + ".png")
-    return file
+    return file, sha
 
 
 async def get_discord_file_from_url(url, filename):
