@@ -1,7 +1,6 @@
-import asyncio
-import os
 import io
 import json
+import os
 
 import aiohttp
 import discord
@@ -10,49 +9,11 @@ import requests
 from marsbots_eden.models import SourceSettings
 
 
-class ActionButtons(discord.ui.View):
-    def __init__(self, *items, ctx, gateway_url, creation_sha, refresh_action, timeout=180):
-        super().__init__(*items, timeout=timeout)
-        self.ctx = ctx
-        self.gateway_url = gateway_url
-        self.creation_sha = creation_sha
-        self.refresh_action = refresh_action
-
-    async def feedback(self, stat, interaction):
-        result = requests.post(self.gateway_url + "/update_stats", json={
-            "creation": self.creation_sha,
-            "stat": stat,
-            "opperation": "increase",
-            "address": interaction.user.id
-        })
-        print(result.content)
-        await interaction.response.defer()
-
-    @discord.ui.button(emoji="🔄", style=discord.ButtonStyle.blurple)
-    async def variations(self, button, interaction):
-        await self.refresh_action()
-
-    @discord.ui.button(emoji="🔥", style=discord.ButtonStyle.red)
-    async def burn(self, button, interaction):
-        await self.feedback('burn', interaction)
-
-    @discord.ui.button(label="🙌", style=discord.ButtonStyle.green)
-    async def praise(self, button, interaction):
-        await self.feedback('praise', interaction)
-        self.stop()
-
-
-async def generation_loop(
+async def request_creation(
     gateway_url: str,
-    minio_url: str,
-    ctx: discord.ApplicationContext,
-    start_bot_message: str,
     source: SourceSettings,
     config,
-    refresh_action,
-    refresh_interval: int,
 ):
-    
     generator_name = config.generator_name
     config_dict = config.__dict__
     config_dict.pop("generator_name", None)
@@ -60,99 +21,63 @@ async def generation_loop(
     data = {
         "source": source.__dict__,
         "generator_name": generator_name,
-        "config": config_dict
+        "config": config_dict,
     }
-    print(data)
 
     result = requests.post(gateway_url + "/request_creation", json=data)
+    check, error = await check_server_result_ok(result)
+
+    if not check:
+        raise Exception(error)
+
+    result = json.loads(result.content)
+    print(result)
+    task_id = result["task_id"]
+    return task_id
+
+
+async def poll_creation_queue(
+    gateway_url: str,
+    minio_url: str,
+    task_id: str,
+    is_video_request: bool = False,
+):
+    result = requests.post(gateway_url + "/get_creations", json={"task": task_id})
 
     check, error = await check_server_result_ok(result)
     if not check:
-        await edit_interaction(ctx, start_bot_message, error)
-        return
+        raise Exception(error)
 
     result = json.loads(result.content)
-    task_id = result["task_id"]
-    current_sha = None
 
-    while True:
-        result = requests.post(gateway_url + "/get_creations", json={"task": task_id})
+    if not result:
+        message_update = "_Server error: task ID not found_"
+        raise Exception(message_update)
 
-        check, error = await check_server_result_ok(result)
-        if not check:
-            await edit_interaction(ctx, start_bot_message, error)
-            return
+    result = result[0]
+    file = await get_file_update(result, minio_url, is_video_request)
 
-        result = json.loads(result.content)
-
-        if not result:
-            message_update = "_Server error: task ID not found_"
-            await edit_interaction(ctx, start_bot_message, message_update)
-            return
-
-        result = result[0]
-        status = result["status"]
-
-        message_update = ""
-        file_update = None
-
-        # update message string
-        if status == "failed":
-            message_update += "_Server error: Eden task failed_"
-        elif status in "pending":
-            message_update += "_Creation is pending_"
-        elif status == "queued":
-            queue_idx = result["status_code"]
-            message_update += f"_Creation is #{queue_idx} in queue_"
-        elif status == "running":
-            progress = result["status_code"]
-            message_update += f"_Creation is **{progress}%** complete_"
-        elif status == "complete":
-            message_update += ""
-
-        # update message image
-        if status == "complete" or "intermediate_sha" in result:
-            video_clip = False
-            if status == 'complete':
-                if 'video_sha' in result:
-                    last_sha = result['video_sha']
-                    video_clip = True
-                else:
-                    last_sha = result['sha']
-            else:
-                last_sha = result['intermediate_sha'][-1]
-            if last_sha != current_sha:
-                current_sha = last_sha                
-                if video_clip:
-                    message_update_gif = "_Creation is complete. Making GIF..._"
-                    await edit_interaction(ctx, start_bot_message, message_update_gif, None)
-                    sha_url = f'{minio_url}/{current_sha}.mp4'
-                    file_update = await get_video_clip_file(sha_url, gif=True)
-                else:
-                    sha_url = f'{minio_url}/{current_sha}'
-                    filename = f'{current_sha}.png'
-                    file_update = await get_discord_file_from_url(sha_url, filename)
-        
-        # finish up
-        await edit_interaction(ctx, start_bot_message, message_update, file_update)
-
-        # add interactions menu
-        if status == "complete":
-            actions = ActionButtons(ctx=ctx, gateway_url=gateway_url, creation_sha=current_sha, refresh_action=refresh_action)
-            await ctx.edit(view=actions)
-
-        if status not in ["queued", "pending", "running"]:
-            break
-        
-        await asyncio.sleep(refresh_interval)
+    return result, file
 
 
-async def edit_interaction(ctx, start_bot_message, message_update, file_update=None):
-    message_content = f"{start_bot_message}\n{message_update}"
-    if file_update:
-        await ctx.edit(content=message_content, file=file_update)
-    else:
-        await ctx.edit(content=message_content)
+async def get_file_update(result, minio_url, is_video_request=False):
+    status = result["status"]
+    file = None
+    if status == "complete" and is_video_request:
+        sha = result["video_sha"]
+        print(sha)
+        sha_url = f"{minio_url}/{sha}"
+        print(sha_url)
+        file = await get_video_clip_file(sha_url, gif=True)
+    elif status == "complete":
+        sha = result["sha"]
+        sha_url = f"{minio_url}/{sha}"
+        file = await get_discord_file_from_url(sha_url, sha + ".png")
+    elif "intermediate_sha" in result:
+        sha = result["intermediate_sha"][-1]
+        sha_url = f"{minio_url}/{sha}"
+        file = await get_discord_file_from_url(sha_url, sha + ".png")
+    return file
 
 
 async def get_discord_file_from_url(url, filename):
@@ -166,13 +91,13 @@ async def get_discord_file_from_url(url, filename):
 
 
 async def get_video_clip_file(sha_url, gif):
-    sha_mp4 = sha_url.split('/')[-1]
-    sha_gif = sha_mp4.replace('.mp4', '.gif')
+    sha_mp4 = sha_url.split("/")[-1]
+    sha_gif = sha_mp4.replace(".mp4", ".gif")
     if gif:
         res = requests.get(sha_url)
         with open(sha_mp4, "wb") as f:
             f.write(res.content)
-        os.system(f'ffmpeg -i {sha_mp4} {sha_gif}')
+        os.system(f"ffmpeg -i {sha_mp4} {sha_gif}")
         file_update = discord.File(sha_gif, sha_gif)
     else:
         file_update = await get_discord_file_from_url(sha_url, sha_mp4)
