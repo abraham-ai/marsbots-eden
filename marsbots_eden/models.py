@@ -3,14 +3,21 @@ from dataclasses import field
 from typing import List
 
 
+
+
+@dataclass
+class SignInCredentials:
+    apiKey: str
+    apiSecret: str
+
+
 @dataclass
 class SourceSettings:
-    origin: str
-    author: int
+    author_id: int
     author_name: str
-    guild: int
+    guild_id: int
     guild_name: str
-    channel: int
+    channel_id: int
     channel_name: str
 
 
@@ -39,17 +46,30 @@ class EdenClipXConfig:
 class StableDiffusionConfig:
     mode: str
     text_input: str
+    stream: bool = False
+    stream_every: int = 1
+    n_samples: int = 1
     width: int = 512
     height: int = 512
+    init_image_file: str = None
+    init_image_strength: float = 0.0
+    init_image_inpaint_mode: str = "cv2_telea"
+    mask_image_file: str = None
+    mask_invert: bool = False
     interpolation_texts: List = field(default_factory=lambda: [])
-    n_interpolate: int = 10
-    ddim_steps: int = 50
-    plms: bool = False
-    C: int = 4
-    f: int = 8
+    interpolation_seeds: List = field(default_factory=lambda: [])
+    interpolation_init_images: List = field(default_factory=lambda: [])
+    interpolation_init_images_use_img2txt: bool = False
+    interpolation_init_images_top_k: int = 2
+    interpolation_init_images_power: float = 3.0
+    interpolation_init_images_min_strength: float = 0.2
+    n_frames: int = 30
+    loop: bool = False
+    smooth: bool = False
+    sampler: str = "klms"
+    steps: int = 50
     scale: float = 12.5
     seed: int = 13
-    fixed_code: bool = False
     generator_name: str = "stable-diffusion"
 
 
