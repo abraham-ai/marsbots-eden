@@ -46,6 +46,7 @@ class EdenClipXConfig:
 class StableDiffusionConfig:
     mode: str
     text_input: str
+    uc_text_input: str
     stream: bool = False
     stream_every: int = 1
     n_samples: int = 1
