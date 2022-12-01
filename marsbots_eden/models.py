@@ -66,10 +66,13 @@ class StableDiffusionConfig:
     n_frames: int = 30
     loop: bool = False
     smooth: bool = False
+    n_film: int = 0
+    fps: int = 12
     sampler: str = "klms"
     steps: int = 50
     scale: float = 12.5
     seed: int = 13
+    upscale_f: float = 1.0
     generator_name: str = "stable-diffusion"
 
 
