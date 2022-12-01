@@ -52,10 +52,10 @@ class StableDiffusionConfig:
     n_samples: int = 1
     width: int = 512
     height: int = 512
-    init_image_file: str = None
+    init_image_data: str = None
     init_image_strength: float = 0.0
     init_image_inpaint_mode: str = "cv2_telea"
-    mask_image_file: str = None
+    mask_image_data: str = None
     mask_invert: bool = False
     interpolation_texts: List = field(default_factory=lambda: [])
     interpolation_seeds: List = field(default_factory=lambda: [])
