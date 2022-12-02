@@ -87,15 +87,24 @@ async def get_file_update(result, minio_url, is_video_request=False, prefer_gif=
     if status == "complete" and is_video_request:
         sha = result["output"]
         sha_url = f"{minio_url}/{sha}"
+        print("get a complete video")
+        print(sha_url)        
         file = await get_video_clip_file(sha_url, gif=prefer_gif)
+        print(file)
     elif status == "complete":
         sha = result["output"]
         sha_url = f"{minio_url}/{sha}"
+        print("get a complete image")
+        print(sha_url)
         file = await get_discord_file_from_url(sha_url, sha + ".png")
+        print(img)
     elif "intermediate_outputs" in result:
         sha = result["intermediate_outputs"][-1]
         sha_url = f"{minio_url}/{sha}"
+        print("get an intermediate image")
+        print(sha_url)
         file = await get_discord_file_from_url(sha_url, sha + ".png")
+        print(file)
     return file, sha
 
 
@@ -105,6 +114,7 @@ async def get_discord_file_from_url(url, filename):
             if resp.status != 200:
                 return None
             data = io.BytesIO(await resp.read())
+            print("get discord file", filename)
             discord_file = discord.File(data, filename)
             return discord_file
 
@@ -115,6 +125,8 @@ async def get_video_clip_file(sha_url, gif):
         sha_mp4 += ".mp4"
     sha_gif = sha_mp4.replace(".mp4", ".gif")
     
+    print("get video clip")
+    print(sha_mp4, sha_gif)
     # get_discord_file_from_url is giving a blank mp4 for some reason, so fall back to writing to disk
     res = requests.get(sha_url)
     with open(sha_mp4, "wb") as f:
