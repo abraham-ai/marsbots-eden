@@ -46,7 +46,7 @@ class EdenClipXConfig:
 class StableDiffusionConfig:
     mode: str
     text_input: str
-    uc_text_input: str
+    uc_text: str = ""
     stream: bool = False
     stream_every: int = 1
     n_samples: int = 1
@@ -75,6 +75,19 @@ class StableDiffusionConfig:
     seed: int = 13
     upscale_f: float = 1.0
     generator_name: str = "stable-diffusion"
+
+
+@dataclass
+class DreamBoothBannyConfig:
+    prompt: str
+    seed: int
+    width: int = 512
+    height: int = 512
+    num_outputs: int = 1
+    num_inference_steps: int = 50
+    guidance_scale: float = 8.0
+    generator_name: str = "dreambooth-banny"
+
 
 
 @dataclass

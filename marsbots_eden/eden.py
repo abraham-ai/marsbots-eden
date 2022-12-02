@@ -92,8 +92,8 @@ async def get_file_update(result, minio_url, is_video_request=False, prefer_gif=
         sha = result["output"]
         sha_url = f"{minio_url}/{sha}"
         file = await get_discord_file_from_url(sha_url, sha + ".png")
-    elif "intermediate_sha" in result:
-        sha = result["intermediate_sha"][-1]
+    elif "intermediate_outputs" in result:
+        sha = result["intermediate_outputs"][-1]
         sha_url = f"{minio_url}/{sha}"
         file = await get_discord_file_from_url(sha_url, sha + ".png")
     return file, sha
