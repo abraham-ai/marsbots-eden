@@ -87,17 +87,21 @@ async def get_file_update(result, minio_url, is_video_request=False, prefer_gif=
     if status == "complete" and is_video_request:
         sha = result["output"]
         sha_url = f"{minio_url}/{sha}"
+        print("----")
         print("get a complete video")
         print(sha_url)        
         file = await get_video_clip_file(sha_url, gif=prefer_gif)
         print(file)
+        print("----")
     elif status == "complete":
         sha = result["output"]
         sha_url = f"{minio_url}/{sha}"
+        print("----")
         print("get a complete image")
         print(sha_url)
         file = await get_discord_file_from_url(sha_url, sha + ".png")
-        print(img)
+        print(file)
+        print("----")
     elif "intermediate_outputs" in result:
         sha = result["intermediate_outputs"][-1]
         sha_url = f"{minio_url}/{sha}"
@@ -105,6 +109,7 @@ async def get_file_update(result, minio_url, is_video_request=False, prefer_gif=
         print(sha_url)
         file = await get_discord_file_from_url(sha_url, sha + ".png")
         print(file)
+        print("----")
     return file, sha
 
 
