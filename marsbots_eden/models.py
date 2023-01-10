@@ -64,6 +64,8 @@ class StableDiffusionConfig:
     interpolation_init_images_top_k: int = 2
     interpolation_init_images_power: float = 3.0
     interpolation_init_images_min_strength: float = 0.2
+    latent_smoothing_std: float = 0.1        
+    scale_modulation: float = 0.1
     n_frames: int = 30
     loop: bool = False
     smooth: bool = False
@@ -71,7 +73,7 @@ class StableDiffusionConfig:
     fps: int = 12
     sampler: str = "klms"
     steps: int = 50
-    scale: float = 12.5
+    scale: float = 10.0
     seed: int = 13
     upscale_f: float = 1.0
     generator_name: str = "stable-diffusion"
