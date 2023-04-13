@@ -3,8 +3,6 @@ from dataclasses import field
 from typing import List
 
 
-
-
 @dataclass
 class SignInCredentials:
     apiKey: str
@@ -19,34 +17,13 @@ class SourceSettings:
     guild_name: str
     channel_id: int
     channel_name: str
-
-
-@dataclass
-class EdenClipXConfig:
-    text_input: str
-    image_url: str = ""
-    step_multiplier: float = 1.0
-    color_target_pixel_fraction: float = 0.75
-    color_loss_f: float = 0.0
-    color_rgb_target: tuple[float] = (0.0, 0.0, 0.0)
-    image_weight: float = 0.35
-    n_permuted_prompts_to_add: int = -1
-    width: int = 0
-    height: int = 0
-    num_octaves: int = 3
-    num_iterations: tuple[int] = (100, 200, 300)
-    octave_scale: float = 2.0
-    clip_model_options: List = field(
-        default_factory=lambda: [["ViT-B/32", "ViT-B/16", "RN50"]],
-    )
-    generator_name: str = "eden-clipx"
+    origin: str = "discord"
 
 
 @dataclass
 class StableDiffusionConfig:
-    mode: str
     text_input: str
-    uc_text: str = ""
+    uc_text: str = "nsfw, poorly drawn face, ugly, tiling, out of frame, extra limbs, disfigured, deformed body, blurry, blurred, watermark, text, grainy, signature, cut off, draft"
     stream: bool = False
     stream_every: int = 1
     n_samples: int = 1
@@ -70,29 +47,13 @@ class StableDiffusionConfig:
     loop: bool = False
     smooth: bool = False
     n_film: int = 0
-    fps: int = 12
-    sampler: str = "klms"
-    steps: int = 50
-    scale: float = 10.0
+    fps: int = 15
+    sampler: str = "euler"
+    steps: int = 60
+    guidance_scale: float = 7.5
     seed: int = 13
     upscale_f: float = 1.0
-    generator_name: str = "stable-diffusion"
+    lora: str = "(none)"
+    lora_scale: float = 0.8
+    generator_name: str = "create"
 
-
-@dataclass
-class DreamBoothBannyConfig:
-    prompt: str
-    seed: int
-    width: int = 512
-    height: int = 512
-    num_outputs: int = 1
-    num_inference_steps: int = 50
-    guidance_scale: float = 8.0
-    generator_name: str = "dreambooth-banny"
-
-
-
-@dataclass
-class OracleConfig:
-    text_input: str
-    generator_name: str = "oracle"

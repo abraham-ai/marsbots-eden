@@ -10,93 +10,97 @@ from marsbots_eden.models import SourceSettings
 from marsbots_eden.models import SignInCredentials
 
 
-async def sign_in(
-    gateway_url: str,
-    credentials: SignInCredentials
-):
-    result = requests.post(gateway_url + "/sign_in", json=credentials.__dict__)
-    check, error = await check_server_result_ok(result)
-    if not check:
-        raise Exception(error)
-    authToken = result.json()['authToken']
-    return authToken
-
-
 async def request_creation(
-    gateway_url: str,
+    api_url: str,
     credentials: SignInCredentials,
     source: SourceSettings,
     config
 ):
-
     generator_name = config.generator_name
     config_dict = config.__dict__
     config_dict.pop("generator_name", None)
 
-    auth_token = await sign_in(gateway_url, credentials)
+    header = {
+        "x-api-key": credentials.apiKey,
+        "x-api-secret": credentials.apiSecret,
+    }
 
-    data = {
-        "token": auth_token,
-        "application": "discord", 
-        "metadata": source.__dict__,
-        "generator_name": generator_name, 
-        "config": config_dict
-    }    
+    request = {
+        "generatorName": generator_name,
+        "config": config_dict,
+        "metadata": source.__dict__
+    }
 
-    result = requests.post(gateway_url + "/request", json=data)
-    check, error = await check_server_result_ok(result)
+    response = requests.post(
+        f'{api_url}/user/create', 
+        json=request, 
+        headers=header
+    )
 
+    check, error = await check_server_result_ok(response)
     if not check:
         raise Exception(error)
-
-    task_id = result.content.decode("utf-8")
+    
+    result = response.json()
+    task_id = result['taskId']
 
     return task_id
 
 
 async def poll_creation_queue(
-    gateway_url: str,
-    minio_url: str,
+    api_url: str,
+    credentials: SignInCredentials,
     task_id: str,
     is_video_request: bool = False,
     prefer_gif: bool = True
 ):
+    header = {
+        "x-api-key": credentials.apiKey,
+        "x-api-secret": credentials.apiSecret,
+    }
+    
+    response = requests.post(
+        f'{api_url}/user/tasks', 
+        json={"taskIds": [task_id]},
+        headers=header
+    )
 
-    result = requests.post(gateway_url + "/fetch", json={"taskIds": [task_id]})
-
-    check, error = await check_server_result_ok(result)
+    check, error = await check_server_result_ok(response)
     if not check:
         raise Exception(error)
 
-    result = json.loads(result.content)
-    
+    result = response.json()
     if not result:
         message_update = "_Server error: task ID not found_"
         raise Exception(message_update)
 
-    result = result[0]
-    file, sha = await get_file_update(result, minio_url, is_video_request, prefer_gif)
+    task = result['tasks'][0]
+    status = task['status']
 
-    return result, file, sha
+    file, file_url = await get_file_update(task, is_video_request, prefer_gif)
+
+    return task, file, file_url
 
 
-async def get_file_update(result, minio_url, is_video_request=False, prefer_gif=True):
+async def get_file_update(result, is_video_request=False, prefer_gif=True):
     status = result["status"]
     file = None
-    sha = None
-    if status == "complete" and is_video_request:
-        sha = result["output"]
-        sha_url = f"{minio_url}/{sha}"
-        file = await get_video_clip_file(sha_url, gif=prefer_gif)
-    elif status == "complete":
-        sha = result["output"]
-        sha_url = f"{minio_url}/{sha}"
-        file = await get_discord_file_from_url(sha_url, sha + ".png")
-    elif "intermediate_outputs" in result:
-        sha = result["intermediate_outputs"][-1]
-        sha_url = f"{minio_url}/{sha}"
-        file = await get_discord_file_from_url(sha_url, sha + ".png")
-    return file, sha
+    output = None
+    if status == "completed" and is_video_request:
+        output = result["output"]["file"]
+        file = await get_video_clip_file(output, gif=prefer_gif)
+    elif status == "completed":
+        output = result["output"]["file"]
+        file = await get_discord_file_from_url(output, "output.jpg")
+    elif result["intermediate_outputs"]:
+        output = result["intermediate_outputs"][-1]["file"]
+        file = await get_discord_file_from_url(output, "output.jpg")
+    else:
+        pass
+        #print(f"status: {status}")
+        #print(result)
+
+    return file, output
 
 
 async def get_discord_file_from_url(url, filename):
@@ -109,24 +113,24 @@ async def get_discord_file_from_url(url, filename):
             return discord_file
 
 
-async def get_video_clip_file(sha_url, gif):
-    sha_mp4 = sha_url.split("/")[-1]
-    if not sha_mp4.endswith(".mp4"):
-        sha_mp4 += ".mp4"
-    sha_gif = sha_mp4.replace(".mp4", ".gif")
+async def get_video_clip_file(output_url, gif):
+    output_name = output_url.split("/")[-1]
+    if not output_name.endswith(".mp4"):
+        output_name += ".mp4"
+    output_gif = output_name.replace(".mp4", ".gif")
     
     # get_discord_file_from_url is giving a blank mp4 for some reason, so fall back to writing to disk
-    res = requests.get(sha_url)
-    with open(sha_mp4, "wb") as f:
+    res = requests.get(output_url)
+    with open(output_name, "wb") as f:
         f.write(res.content)
     if gif:
-        os.system(f"ffmpeg -i {sha_mp4} {sha_gif}")
-        file_update = discord.File(sha_gif, sha_gif)
+        os.system(f"ffmpeg -i {output_name} {output_gif}")
+        file_update = discord.File(output_gif, output_gif)
     else:
-        file_update = discord.File(sha_mp4, sha_mp4)
+        file_update = discord.File(output_name, output_name)
 
-    delete_file(sha_mp4)
-    delete_file(sha_gif)
+    delete_file(output_name)
+    delete_file(output_gif)
 
     return file_update
 
