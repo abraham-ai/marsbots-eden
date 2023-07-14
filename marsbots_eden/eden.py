@@ -32,7 +32,7 @@ async def request_creation(
     }
 
     response = requests.post(
-        f'{api_url}/user/create', 
+        f'{api_url}/tasks/create', 
         json=request, 
         headers=header
     )
@@ -58,10 +58,9 @@ async def poll_creation_queue(
         "x-api-key": credentials.apiKey,
         "x-api-secret": credentials.apiSecret,
     }
-    
-    response = requests.post(
-        f'{api_url}/user/tasks', 
-        json={"taskIds": [task_id]},
+
+    response = requests.get(
+        f'{api_url}/tasks/{task_id}', 
         headers=header
     )
 
@@ -74,7 +73,7 @@ async def poll_creation_queue(
         message_update = "_Server error: task ID not found_"
         raise Exception(message_update)
 
-    task = result['tasks'][0]
+    task = result['task']
     status = task['status']
 
     file, file_url = await get_file_update(task, is_video_request, prefer_gif)
@@ -87,19 +86,16 @@ async def get_file_update(result, is_video_request=False, prefer_gif=True):
     file = None
     output = None
     if status == "completed" and is_video_request:
-        output = result["output"]["file"]
+        output = result["output"]["files"][0]
         file = await get_video_clip_file(output, gif=prefer_gif)
     elif status == "completed":
-        output = result["output"]["file"]
+        output = result["output"]["files"][0]
         file = await get_discord_file_from_url(output, "output.jpg")
-    elif result["intermediate_outputs"]:
-        output = result["intermediate_outputs"][-1]["file"]
+    elif result["intermediateOutputs"]:
+        output = result["intermediateOutputs"][-1]["files"][0]
         file = await get_discord_file_from_url(output, "output.jpg")
     else:
         pass
-        #print(f"status: {status}")
-        #print(result)
-
     return file, output
 
 
