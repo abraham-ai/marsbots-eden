@@ -86,10 +86,10 @@ async def get_file_update(result, is_video_request=False, prefer_gif=True):
     file = None
     output = None
     if status == "completed" and is_video_request:
-        output = result["output"]["files"][0]
+        output = result["creation"]["uri"]
         file = await get_video_clip_file(output, gif=prefer_gif)
     elif status == "completed":
-        output = result["output"]["files"][0]
+        output = result["creation"]["uri"]
         file = await get_discord_file_from_url(output, "output.jpg")
     elif result["intermediateOutputs"]:
         output = result["intermediateOutputs"][-1]["files"][0]
