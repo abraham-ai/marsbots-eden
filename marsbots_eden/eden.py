@@ -37,7 +37,11 @@ async def request_creation(
         headers=header
     )
 
+    print("config")
+    print(config_dict)
+
     check, error = await check_server_result_ok(response)
+
     if not check:
         raise Exception(error)
     

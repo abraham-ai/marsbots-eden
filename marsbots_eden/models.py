@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from dataclasses import field
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -20,40 +20,45 @@ class SourceSettings:
     origin: str = "discord"
 
 
+# @dataclass
+# class StableDiffusionConfig:
+#     text_input: str
+#     uc_text: Optional[str]
+#     stream: Optional[bool]
+#     stream_every: Optional[int]
+#     n_samples: Optional[int]
+#     width: Optional[int]
+#     height: Optional[int]
+#     init_image_data: Optional[str]
+#     init_image_strength: Optional[float]
+#     init_image_inpaint_mode: Optional[str]
+#     mask_image_data: Optional[str]
+#     mask_invert: Optional[bool]
+#     interpolation_texts: Optional[List]
+#     interpolation_seeds: Optional[List]
+#     interpolation_init_images: Optional[List]
+#     interpolation_init_images_use_img2txt: Optional[bool]
+#     interpolation_init_images_top_k: Optional[int]
+#     interpolation_init_images_power: Optional[float]
+#     interpolation_init_images_min_strength: Optional[float]
+#     latent_smoothing_std: Optional[float]
+#     scale_modulation: Optional[float]
+#     n_frames: Optional[int]
+#     loop: Optional[bool]
+#     smooth: Optional[bool]
+#     n_film: Optional[int]
+#     fps: Optional[int]
+#     sampler: Optional[str]
+#     steps: Optional[int]
+#     guidance_scale: Optional[float]
+#     seed: Optional[int]
+#     upscale_f: Optional[float]
+#     lora: Optional[str]
+#     lora_scale: Optional[float]
+#     generator_name: Optional[str]
+
 @dataclass
 class StableDiffusionConfig:
-    text_input: str
-    uc_text: str = "nsfw, poorly drawn face, ugly, tiling, out of frame, extra limbs, disfigured, deformed body, blurry, blurred, watermark, text, grainy, signature, cut off, draft"
-    stream: bool = False
-    stream_every: int = 1
-    n_samples: int = 1
-    width: int = 512
-    height: int = 512
-    init_image_data: str = None
-    init_image_strength: float = 0.0
-    init_image_inpaint_mode: str = "cv2_telea"
-    mask_image_data: str = None
-    mask_invert: bool = False
-    interpolation_texts: List = field(default_factory=lambda: [])
-    interpolation_seeds: List = field(default_factory=lambda: [])
-    interpolation_init_images: List = field(default_factory=lambda: [])
-    interpolation_init_images_use_img2txt: bool = False
-    interpolation_init_images_top_k: int = 2
-    interpolation_init_images_power: float = 3.0
-    interpolation_init_images_min_strength: float = 0.2
-    latent_smoothing_std: float = 0.1        
-    scale_modulation: float = 0.1
-    n_frames: int = 1
-    loop: bool = False
-    smooth: bool = False
-    n_film: int = 0
-    fps: int = 15
-    sampler: str = "euler"
-    steps: int = 35
-    guidance_scale: float = 7.5
-    seed: int = None
-    upscale_f: float = 1.0
-    lora: str = None
-    lora_scale: float = 0.8
-    generator_name: str = "create"
-
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
