@@ -43,17 +43,17 @@ class StableDiffusionConfig:
     interpolation_init_images_min_strength: float = 0.2
     latent_smoothing_std: float = 0.1        
     scale_modulation: float = 0.1
-    n_frames: int = 30
+    n_frames: int = 1
     loop: bool = False
     smooth: bool = False
     n_film: int = 0
     fps: int = 15
     sampler: str = "euler"
-    steps: int = 60
+    steps: int = 35
     guidance_scale: float = 7.5
-    seed: int = 13
+    seed: int = None
     upscale_f: float = 1.0
-    lora: str = "(none)"
+    lora: str = None
     lora_scale: float = 0.8
     generator_name: str = "create"
 
